@@ -31,7 +31,12 @@ class OpenAICompatibleLLM:
         chat_model: ChatOpenAI | None = None,
     ) -> None:
         self._model = model
-        extra_body = {"chat_template_kwargs": {"enable_thinking": False}} if disable_thinking else None
+        # vLLM lee chat_template_kwargs; Ollama lee reasoning_effort. Cada servidor ignora el otro.
+        extra_body = (
+            {"chat_template_kwargs": {"enable_thinking": False}, "reasoning_effort": "none"}
+            if disable_thinking
+            else None
+        )
         self._chat = chat_model or ChatOpenAI(
             base_url=base_url,
             model=model,
