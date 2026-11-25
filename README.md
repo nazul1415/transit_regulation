@@ -9,7 +9,7 @@ Backend en FastAPI que responde preguntas sobre el Reglamento de Tránsito de la
 - Solo se aceptan citas a fragmentos que estaban en el contexto. Si el modelo inventa un id o menciona un artículo que no se recuperó, la respuesta se descarta y se devuelve "no encontré".
 - Si la búsqueda no tiene soporte suficiente, se responde "no encontré" **sin llamar al LLM**.
 - Si el LLM no responde, se devuelven los fragmentos más relevantes sin resumen (modo degradado).
-- **Sin PyTorch.** No hay entrenamiento ni fine-tuning. El LLM (Qwen3) y los embeddings (bge-m3) se consumen por API compatible con OpenAI desde el servidor de inferencia en la GPU en la nube.
+- **Sin PyTorch.** No hay entrenamiento ni fine-tuning. El LLM (Gemini Flash-Lite por defecto; también sirve Qwen3 en vLLM u Ollama) y los embeddings (bge-m3) se consumen por API compatible con OpenAI.
 
 ## Arquitectura
 
@@ -39,7 +39,7 @@ Patrones usados:
 2. **Búsqueda híbrida**: semántica (vector denso de bge-m3) + palabras clave (vector disperso con IDF de Qdrant, tipo BM25, sin descargar modelos), fusionadas con Reciprocal Rank Fusion.
 3. **Umbral de soporte**: referencia exacta, o similitud semántica ≥ `min_dense_score`, o cobertura de palabras clave ≥ `min_cobertura_lexica`. Si no, "no encontré".
 4. **Parent document retrieval**: se manda al LLM el artículo padre completo (como lista de fragmentos con id) para no perder la sanción que suele ir al final del artículo.
-5. **LLM** (LangChain `ChatOpenAI` contra vLLM/Qwen3) devuelve JSON `{encontrado, respuesta, citas: [ids]}`.
+5. **LLM** (LangChain `ChatOpenAI` contra cualquier API compatible con OpenAI: Gemini, vLLM, Ollama) devuelve JSON `{encontrado, respuesta, citas: [ids]}`.
 6. **Verificación de citas** y armado de la respuesta con el texto desde la BD.
 
 ## Endpoints
@@ -66,13 +66,23 @@ curl -s localhost:8080/v1/consultas -H 'Content-Type: application/json' \
 Prioridad: variables de entorno > `.env` > `config/settings.yaml` > valores por defecto.
 Formato de las variables: `RT_<SECCION>__<CLAVE>` (p. ej. `RT_LLM__BASE_URL`). Los secretos (`*_API_KEY`) van solo en `.env`.
 
-Lo mínimo para producción:
+Lo mínimo para producción (LLM con Gemini):
 ```dotenv
-RT_LLM__BASE_URL=https://tu-servidor-gpu/v1      # vLLM: vllm serve Qwen/Qwen3-8B
-RT_LLM__API_KEY=...
+RT_LLM__BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+RT_LLM__MODEL=gemini-3.5-flash-lite
+RT_LLM__API_KEY=...                              # key de Google AI Studio
+RT_LLM__DISABLE_THINKING=false                   # Gemini no usa los parámetros de vLLM/Ollama
 RT_EMBEDDINGS__BASE_URL=https://tu-servidor-gpu-embeddings/v1   # TEI o vLLM con BAAI/bge-m3
 RT_EMBEDDINGS__API_KEY=...
 ```
+
+**Elegir el modelo de Gemini.** Google retira modelos con frecuencia (`gemini-2.5-flash-lite` ya devuelve 404 a cuentas nuevas). Lista los disponibles para tu key:
+```bash
+curl -s https://generativelanguage.googleapis.com/v1beta/openai/models -H "Authorization: Bearer $RT_LLM__API_KEY" | grep -o '"id": *"[^"]*"' | grep -i lite
+```
+
+**LLM alterno (Qwen3).** Para no depender de un servicio externo, sirve el modelo tú mismo y cambia `RT_LLM__BASE_URL`, `RT_LLM__MODEL` y deja `RT_LLM__DISABLE_THINKING=true` (el valor por defecto; envía `chat_template_kwargs` para vLLM y `reasoning_effort` para Ollama). Ollama en CPU es muy lento con este contexto (minutos por consulta); sirve una GPU.
+Si el API corre en Docker y Ollama en tu PC, usa `RT_LLM__BASE_URL=http://host.docker.internal:11434/v1` (en Docker, `localhost` es el propio contenedor).
 
 Servir los modelos en la GPU (referencia):
 ```bash
