@@ -1,0 +1,57 @@
+# Configuración no secreta. Cualquier valor se puede sobrescribir por entorno:
+#   RT_<SECCION>__<CLAVE>=valor   (p. ej. RT_LLM__BASE_URL=https://mi-gpu/v1)
+# Los secretos (api_key) van en .env, nunca aquí.
+
+app:
+  nombre: API Reglamento de Tránsito CDMX
+  entorno: local
+  log_level: INFO
+  cors_origins: ["*"]
+
+data:
+  chunks_path: data/reglamento_transito_cdmx_chunks.jsonl
+  articulos_path: data/reglamento_transito_cdmx_articulos.json
+
+qdrant:
+  url: http://localhost:6333
+  collection: reglamento_transito_cdmx
+  timeout_s: 10
+
+embeddings:
+  provider: openai_compatible      # openai_compatible | hashing (solo pruebas)
+  base_url: http://localhost:8081/v1
+  model: BAAI/bge-m3
+  dimension: 1024
+  batch_size: 32
+  query_prefix: ""                 # e5: "query: "
+  document_prefix: ""              # e5: "passage: "
+
+llm:
+  provider: openai_compatible      # openai_compatible | fake (solo pruebas)
+  base_url: http://localhost:8000/v1
+  model: Qwen/Qwen3-8B
+  temperature: 0.1
+  max_tokens: 1024
+  timeout_s: 120
+  max_retries: 2
+  disable_thinking: true
+  system_prompt_path: config/prompts/sistema.md
+
+retrieval:
+  top_k: 8
+  dense_k: 20
+  sparse_k: 20
+  rrf_k: 60
+  min_dense_score: 0.45          # calibrar con bge-m3 real
+  min_cobertura_lexica: 0.6
+  max_exact_matches: 40
+  max_parent_articles: 3
+  max_context_chars: 24000
+
+answer:
+  strict_citations: true
+
+uma:
+  # Verificar cada febrero en INEGI. Valor diario en pesos.
+  valor_diario: 117.31
+  vigente_desde: "2026-02-01"

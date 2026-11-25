@@ -1,0 +1,49 @@
+# Uso:
+#   cp .env.example .env            # y llena RT_LLM__BASE_URL / RT_EMBEDDINGS__BASE_URL
+#   docker compose up -d qdrant api
+#   docker compose run --rm ingest  # indexa los 768 chunks (una vez, o al actualizar el reglamento)
+#
+# Embeddings locales en CPU (opcional, para desarrollo sin GPU):
+#   docker compose --profile embeddings-local up -d embeddings
+#   y en .env: RT_EMBEDDINGS__BASE_URL=http://embeddings/v1
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.15.4
+    ports: ["6333:6333"]
+    volumes: ["qdrant_data:/qdrant/storage"]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build: .
+    env_file: .env
+    environment:
+      RT_QDRANT__URL: http://qdrant:6333
+    ports: ["8080:8080"]
+    depends_on:
+      qdrant: { condition: service_healthy }
+
+  ingest:
+    build: .
+    env_file: .env
+    environment:
+      RT_QDRANT__URL: http://qdrant:6333
+    command: ["python", "-m", "app.cli", "ingest"]
+    depends_on:
+      qdrant: { condition: service_healthy }
+    profiles: ["tools"]
+
+  # bge-m3 servido por Hugging Face TEI con API compatible con OpenAI (/v1/embeddings).
+  embeddings:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.8
+    command: ["--model-id", "BAAI/bge-m3"]
+    ports: ["8081:80"]
+    volumes: ["tei_data:/data"]
+    profiles: ["embeddings-local"]
+
+volumes:
+  qdrant_data:
+  tei_data:

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -221,3 +222,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+=======
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.venv/
+*.egg-info/
+build/
+>>>>>>> 5ae8500 (MVP del backend de consulta del Reglamento de Tránsito CDMX)
